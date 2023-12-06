@@ -1,40 +1,12 @@
 # 二十张图片彻底讲明白 Webpack 设计理念，以看懂为目的
 
-## 一、前言
-
-> 本文是 **从零到亿系统性的建立前端构建知识体系✨**[1] 中的第八篇。
-
-**Webpack**[2] 一直都是有些人的心魔，不清楚原理是什么，不知道怎么去配置，只会基本的 API 使用。它就像一个黑盒，让部分开发者对它望而生畏。
-
-而本节最大的作用，就是帮大家一点一点的消灭心魔。
-
-大家之所以认为 **Webpack** 复杂，很大程度上是因为它依附着一套庞大的生态系统。**其实 Webpack 的核心流程远没有我们想象中那么复杂**，甚至只需百来行代码就能完整复刻出来。
-
-因此在学习过程中，我们应**注重学习它本身的设计思想**，不管是它的 `Plugin 系统`还是 `Loader 系统`，**都是建立于这套核心思想之上**。所谓万变不离其宗，一通百通。
-
-在本文中，我将会从 Webpack 的整体流程出发，通篇采用**结论先行、自顶向下**的方式进行讲解。在涉及到原理性的知识时，尽量采用图文的方式辅以理解，`注重实现思路`，`注重设计思想`。
-
-另外，如果在阅读过程中感到吃力（很正常），可自行补一补 Webpack 专栏中前置性的知识，每一节均完全解耦，可放心食用：
-
-**不了解也没关系，在本节中我都会一一讲到。**
-
-- **从构建产物洞悉模块化原理**[3]
-- **【Webpack】异步加载\(懒加载\)原理**[4]
-- **前端工程化基石 -- AST（抽象语法树）以及AST的广泛应用**[5]
-- **【万字长文｜趣味图解】彻底弄懂Webpack中的Loader机制**[6]
-- **【Webpack Plugin】写了个插件跟喜欢的女生表白，结果......**[7]
-- **中级/高级前端】为什么我建议你一定要读一读 Tapable 源码？**[8]
-
-文中所涉及到的代码均放到个人 github 仓库中：**github.com/noBaldAaa/h…**[9]
-
-## 二、基本使用
+## 基本使用
 
 > 初始化项目：
 
 ```
 npm init  //初始化一个项目
 yarn add webpack //安装项目依赖
-复制代码
 ```
 
 安装完依赖后，根据以下目录结构来添加对应的目录和文件：
@@ -49,7 +21,6 @@ yarn add webpack //安装项目依赖
      |── index.js
      |── name.js
      └── age.js
-复制代码
 ```
 
 **webpack.config.js**
@@ -65,7 +36,6 @@ module.exports = {
   },
   devtool: "source-map", //防止干扰源文件
 };
-复制代码
 ```
 
 **src/index.js（`本文不讨论CommonJS 和 ES Module之间的引用关系，以CommonJS为准`）**
@@ -74,28 +44,25 @@ module.exports = {
 const name = require("./name");
 const age = require("./age");
 console.log("entry文件打印作者信息", name, age);
-复制代码
 ```
 
 **src/name.js**
 
 ```
 module.exports = "不要秃头啊";
-复制代码
 ```
 
 **src/age.js**
 
 ```
 module.exports = "99";
-复制代码
 ```
 
 **文件依赖关系：**
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iachRGKAVAJYZo5DoHuMzouWfc4dCddZQbjCZXsibMDcP80lcR857swEw/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
-**Webpack**[10] 本质上是一个函数，它接受一个配置信息作为参数，执行后返回一个 **compiler 对象**[11]，调用 `compiler` 对象中的 **run**[12] 方法就会启动编译。`run` 方法接受一个回调，可以用来查看编译过程中的错误信息或编译信息。
+Webpack 本质上是一个函数，它接受一个配置信息作为参数，执行后返回一个 compiler 对象，调用 `compiler` 对象中的 run 方法就会启动编译。`run` 方法接受一个回调，可以用来查看编译过程中的错误信息或编译信息。
 
 **debugger.js**
 
@@ -116,32 +83,29 @@ compiler.run((err, stats) => {
     })
   );
 });
-复制代码
 ```
 
 执行打包命令：
 
 ```
 node ./debugger.js
-复制代码
 ```
 
 得到产出文件 **dist/main.js**（先暂停三十秒读一读下面代码，命名经优化）：
 
-carbon (1).png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaEicdHGdXeUoiabf6RQjrgxyIZjeDDc8Zp0H12Bkt4s97Tyz6uDBB8iaqQ/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
 运行该文件，得到结果：
 
 ```
 entry文件打印作者信息 不要秃头啊 99
-复制代码
 ```
 
-## 三、核心思想
+## 核心思想
 
 我们先来分析一下源代码和构建产物之间的关系：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2ia0KiaLFJox3gHzhYudE7qGdsb1qeZF8zm9WPJQXhnGR7UgH9e2yRNy6w/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
 从图中可以看出，入口文件（`src/index.js`）被包裹在最后的立即执行函数中，而它所依赖的模块（`src/name.js`、`src/age.js`）则被放进了 `modules` 对象中（`modules` 用于存放**入口文件的依赖模块**，`key 值为依赖模块路径，value 值为依赖模块源代码`）。
 
@@ -178,7 +142,6 @@ image.png
       'console.log("entry文件打印作者信息", name, age);',
   },
   ];
-  复制代码
   ```
 
 - 第三步：根据上一步得到的信息，生成最终输出到硬盘中的文件（dist）：包括 modules 对象、require 模版代码、入口执行文件等
@@ -187,7 +150,7 @@ image.png
 
 **Loader 系统** 本质上就是接收资源文件，并对其进行转换，最终输出转换后的文件：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaxiaacicw9MzTy2cemdTxAFYGHhXRLhYMFyCnndJhMO8Ewnricbe1hxJaQ/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
 除此之外，打包过程中也有一些特定的时机需要处理，比如：
 
@@ -201,11 +164,11 @@ image.png
 
 **Plugin 系统** 本质上就是一种事件流的机制，到了固定的时间节点就广播特定的事件，用户可以在事件内执行特定的逻辑，类似于生命周期：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaV99Wu3ZicAj9GDNJKXZEppO8mozqibsLpZOSttJ8Y57qS7Dw75z7w5og/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
 这些设计也都是根据使用场景来的，只有理清需求后我们才能更好的理解它的设计思想。
 
-## 四、架构设计
+## 架构设计
 
 在理清楚核心思想后，剩下的就是对其进行一步步拆解。
 
@@ -215,15 +178,15 @@ image.png
 - 打包过程中（也就是编译阶段）
 - 打包结束后（包含打包成功和打包失败）
 
-这其中又以编译阶段最为复杂，另外还考虑到一个场景：**watch mode**[13]（当文件变化时，将重新进行编译），因此这里最好将编译阶段（也就是下文中的`compilation`）单独解耦出来。
+这其中又以编译阶段最为复杂，另外还考虑到一个场景：**watch mode**[1]（当文件变化时，将重新进行编译），因此这里最好将编译阶段（也就是下文中的`compilation`）单独解耦出来。
 
 在 **Webpack** 源码中，`compiler` 就像是一个大管家，它就代表上面说的三个阶段，在它上面挂载着各种生命周期函数，而 `compilation` 就像专管伙食的厨师，专门负责编译相关的工作，也就是`打包过程中`这个阶段。画个图帮助大家理解：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2ia0X9pGW335Zw2sJkicYfuGaTBZVsjHPZ9dAW3wlyXbjVvATbgf5BM99Q/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
 大致架构定下后，那现在应该如何实现这套事件流呢？
 
-这时候就需要借助 **Tapable**[14] 了！它是一个类似于 Node.js 中的 **EventEmitter**[15] 的库，但**更专注于自定义事件的触发和处理**。通过 Tapable 我们可以注册自定义事件，然后在适当的时机去执行自定义事件。
+这时候就需要借助 **Tapable** 了！它是一个类似于 Node.js 中的 **EventEmitter** 的库，但**更专注于自定义事件的触发和处理**。通过 Tapable 我们可以注册自定义事件，然后在适当的时机去执行自定义事件。
 
 类比到 `Vue` 和 `React` 框架中的生命周期函数，它们就是到了固定的时间节点就执行对应的生命周期，`tapable` 做的事情就和这个差不多，我们可以通过它先注册一系列的生命周期函数，然后在合适的时间点执行。
 
@@ -251,7 +214,6 @@ syncHook.tap("监听器3", (name) => {
 });
 //第三步：触发事件，这里传的是实参，会被每一个注册函数接收到
 syncHook.call("不要秃头啊", "99");
-复制代码
 ```
 
 运行上面这段代码，得到结果：
@@ -260,7 +222,6 @@ syncHook.call("不要秃头啊", "99");
 监听器1 不要秃头啊 99
 监听器2 不要秃头啊
 监听器3 不要秃头啊
-复制代码
 ```
 
 在 Webpack 中，就是通过 `tapable` 在 `comiler` 和 `compilation` 上像这样挂载着一系列`生命周期 Hook`，它就像是一座桥梁，贯穿着整个构建过程：
@@ -275,10 +236,9 @@ class Compiler {
     };
   }
 }
-复制代码
 ```
 
-## 五、具体实现
+## 具体实现
 
 整个实现过程大致分为以下步骤：
 
@@ -293,9 +253,9 @@ class Compiler {
 - （9）把各个代码块 `chunk` 转换成一个一个文件加入到输出列表
 - （10）确定好输出内容之后，根据配置的输出路径和文件名，将文件内容写入到文件系统
 
-### 5.1、搭建结构，读取配置参数
+### 1、搭建结构，读取配置参数
 
-根据 **Webpack**[16] 的用法可以看出， Webpack 本质上是一个函数，它接受一个配置信息作为参数，执行后返回一个 **compiler 对象**[17]，调用 `compiler` 对象中的 **run**[18] 方法就会启动编译。`run` 方法接受一个回调，可以用来查看编译过程中的错误信息或编译信息。
+根据 **Webpack** 的用法可以看出， Webpack 本质上是一个函数，它接受一个配置信息作为参数，执行后返回一个 **compiler** 对象，调用 `compiler` 对象中的 **run** 方法就会启动编译。`run` 方法接受一个回调，可以用来查看编译过程中的错误信息或编译信息。
 
 修改 **debugger.js** 中 webpack 的引用：
 
@@ -314,7 +274,6 @@ compiler.run((err, stats) => {
     })
   );
 });
-复制代码
 ```
 
 搭建结构：
@@ -331,14 +290,13 @@ function webpack(webpackOptions) {
   const compiler = new Compiler()
   return compiler;
 }
-复制代码
 ```
 
 运行流程图：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaZVuIRJPkA0cB1JyNKGyzrhq5rO0ggXP0YUtmN4KHPdiayQKDg2mglzg/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
-### 5.2、用配置参数对象初始化 `Compiler` 对象
+### 2、用配置参数对象初始化 `Compiler` 对象
 
 上面提到过，`Compiler` 它就是整个打包过程的大管家，它里面放着各种你可能需要的`编译信息`和`生命周期 Hook`，而且是单例模式。
 
@@ -361,14 +319,13 @@ function webpack(webpackOptions) {
 + const compiler = new Compiler(webpackOptions)
   return compiler;
 }
-复制代码
 ```
 
 运行流程图：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaFS6aZqnRfRem0NiaeDoAspDQj9eLEKJoacdkqibs5dovdeOfmseRg1Lw/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
-### 5.3、挂载配置文件中的插件
+### 3、挂载配置文件中的插件
 
 先写两个自定义插件配置到 **webpack.config.js** 中：一个在开始打包的时候执行，一个在打包完成后执行。
 
@@ -392,7 +349,6 @@ class WebpackDonePlugin {
     });
   }
 }
-复制代码
 ```
 
 **webpack.config.js**：
@@ -403,7 +359,6 @@ module.exports = {
   //其他省略
 + plugins: [new WebpackRunPlugin(), new WebpackDonePlugin()],
 };
-复制代码
 ```
 
 插件定义时必须要有一个 `apply` 方法，加载插件其实执行 `apply` 方法。
@@ -420,14 +375,13 @@ function webpack(webpackOptions) {
 + }
   return compiler;
 }
-复制代码
 ```
 
 运行流程图：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaiaxSAT8vlXkKo3ofrPqoicfMVdbJWK50PkWJe3DmNK9o5ic6wcwqNrVJQ/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
-### 5.4、执行`Compiler`对象的`run`方法开始执行编译
+### 4、执行`Compiler`对象的`run`方法开始执行编译
 
 重点来了！
 
@@ -453,7 +407,6 @@ class Compiler {
 +   this.compile(onCompiled); //开始编译，成功之后调用onCompiled
   }
 }
-复制代码
 ```
 
 上面架构设计中提到过，编译这个阶段需要单独解耦出来，通过 `Compilation` 来完成，定义`Compilation` 大致结构：
@@ -488,18 +441,17 @@ class Compiler {
 +    callback()
 +   }
 + }
-复制代码
 ```
 
 运行流程图（点击可放大）：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iatuUaOmpgHu2k6Rz48XgLM5r8r0vECsutHog6zr5diaXCLTrRzZjIOaQ/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
-### 5.5、根据配置文件中的`entry`配置项找到所有的入口
+### 5、根据配置文件中的`entry`配置项找到所有的入口
 
 接下来就正式开始编译了，逻辑均在 `Compilation` 中。
 
-在编译前我们首先需要知道入口文件，而 **入口的配置方式**[19] 有多种，可以配置成字符串，也可以配置成一个对象，这一步骤就是为了统一配置信息的格式，然后找出所有的入口（考虑多入口打包的场景）。
+在编译前我们首先需要知道入口文件，而 **入口的配置方式**[2] 有多种，可以配置成字符串，也可以配置成一个对象，这一步骤就是为了统一配置信息的格式，然后找出所有的入口（考虑多入口打包的场景）。
 
 ```
 class Compilation {
@@ -524,14 +476,13 @@ class Compilation {
     callback()
   }
 }
-复制代码
 ```
 
 运行流程图（点击可放大）：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaQXSXvCupiay18hhOHuoC3FVViaoAibdmricETnodKS1OSECRdVVbjMnibrA/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
-### 5.6、从入口文件出发，调用配置的`loader`规则，对各模块进行编译
+### 6、从入口文件出发，调用配置的`loader`规则，对各模块进行编译
 
 Loader 本质上就是一个函数，接收资源文件或者上一个 Loader 产生的结果作为入参，最终输出转换后的结果。
 
@@ -545,7 +496,6 @@ const loader1 = (source) => {
 const loader2 = (source) => {
   return source + "//给你的代码加点注释：loader2";
 };
-复制代码
 ```
 
 **webpack.config.js**
@@ -563,7 +513,6 @@ module.exports = {
     ],
   },
 };
-复制代码
 ```
 
 这一步骤将从入口文件出发，然后查找出对应的 Loader 对源代码进行翻译和替换。
@@ -571,13 +520,10 @@ module.exports = {
 主要有三个要点：
 
 - （6.1）把入口文件的绝对路径添加到依赖数组（`this.fileDependencies`）中，记录此次编译依赖的模块
-
 - （6.2）得到入口模块的的 `module` 对象 （里面放着该模块的路径、依赖模块、源代码等）
-
-- - （6.2.1）读取模块内容，获取源代码
+  - （6.2.1）读取模块内容，获取源代码
   - （6.2.2）创建模块对象
   - （6.2.3）找到对应的 `Loader` 对源代码进行翻译和替换
-
 - （6.3）将生成的入口文件 `module` 对象 push 进 `this.modules` 中
 
 > 6.1：把入口文件的绝对路径添加到依赖数组中，记录此次编译依赖的模块
@@ -621,7 +567,6 @@ class Compilation {
     callback()
   }
 }
-复制代码
 ```
 
 > 6.2.1：读取模块内容，获取源代码
@@ -661,7 +606,6 @@ class Compilation {
     callback()
   }
 }
-复制代码
 ```
 
 > 6.2.2：创建模块对象
@@ -690,7 +634,6 @@ class Compilation {
     //省略
   }
 }
-复制代码
 ```
 
 > 6.2.3：找到对应的 `Loader` 对源代码进行翻译和替换
@@ -735,7 +678,6 @@ class Compilation {
     //省略
   }
 }
-复制代码
 ```
 
 > 6.3：将生成的入口文件 `module` 对象 push 进 `this.modules` 中
@@ -772,20 +714,19 @@ class Compilation {
     callback()
   }
 }
-复制代码
 ```
 
 运行流程图（点击可放大）：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaak3Hia87snBSoia9jVdAx3SggNSIFiaJIiabvnLvPREXKrI3mSxhwvCfbg/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
-### 5.7、找出此模块所依赖的模块，再对依赖模块进行编译
+### 7、找出此模块所依赖的模块，再对依赖模块进行编译
 
 该步骤是整体流程中最为复杂的，一遍看不懂没关系，可以先理解思路。
 
 该步骤经过细化可以将其拆分成十个小步骤：
 
-- （7.1）：先把源代码编译成 **AST**[20]
+- （7.1）：先把源代码编译成 **AST**[3]
 - （7.2）：在 `AST` 中查找 `require` 语句，找出依赖的模块名称和绝对路径
 - （7.3）：将依赖模块的绝对路径 push 到 `this.fileDependencies` 中
 - （7.4）：生成依赖模块的`模块 id`
@@ -885,14 +826,13 @@ class Compilation {
    }  
   //省略其他
 }
-复制代码
 ```
 
 运行流程图（点击可放大）：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaYkF8icwtDia5pLibziaPScc9omwicgWbxaARVr5uwUWWPvU9xhF6xBalXZg/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
-### 5.8、等所有模块都编译完成后，根据模块之间的依赖关系，组装代码块 `chunk`
+### 8、等所有模块都编译完成后，根据模块之间的依赖关系，组装代码块 `chunk`
 
 现在，我们已经知道了入口模块和它所依赖模块的所有信息，可以去生成对应的代码块了。
 
@@ -937,14 +877,13 @@ class Compilation {
     callback()
   }
 }
-复制代码
 ```
 
 运行流程图（点击可放大）：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaJdMKPgSa46RCZD2aBdGZvosuxPAiaUGN3nUoNib8uj4ia9f4fIbZv13ibQ/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
-### 5.9、把各个代码块 `chunk` 转换成一个一个文件加入到输出列表
+### 9、把各个代码块 `chunk` 转换成一个一个文件加入到输出列表
 
 这一步需要结合配置文件中的`output.filename`去生成输出文件的文件名称，同时还需要生成运行时代码：
 
@@ -1022,17 +961,15 @@ class Compilation {
 +     );
   }
 }
-
-复制代码
 ```
 
 到了这里，`Compilation` 的逻辑就走完了。
 
 运行流程图（点击可放大）：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaDhxbeGjibrpicmYsqOfNIGG0iakO7mR2OM6eiaIEickmy80578BK15GHhMA/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
-### 5.10、确定好输出内容之后，根据配置的输出路径和文件名，将文件内容写入到文件系统
+### 10、确定好输出内容之后，根据配置的输出路径和文件名，将文件内容写入到文件系统
 
 该步骤就很简单了，直接按照 Compilation 中的 this.status 对象将文件内容写入到文件系统（这里就是硬盘）。
 
@@ -1070,28 +1007,27 @@ class Compiler {
     this.compile(onCompiled); //开始编译，成功之后调用onCompiled
   }
 }
-复制代码
 ```
 
 运行流程图（点击可放大）：
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaxNfqJQiaQo9IdUdSjAQmDsWS2OEqKpJDsVibHbdQHaFRjDCbqxfYLPzA/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
 ### 完整流程图
 
 以上就是整个 Webpack 的运行流程图，还是描述的比较清晰的，跟着一步步走看懂肯定没问题！
 
-image.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaCHd6icnEcj7N4F0arnF7VqbXJnrDrAUJub3L3LRI2ERQAGvO3xeMWaw/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)
 
 执行 `node ./debugger.js`，通过我们手写的 Webpack 进行打包，得到输出文件 **dist/main.js**：
 
-carbon.png
+![图片](https://mmbiz.qpic.cn/mmbiz/mshqAkialV7F9r8KqkI6SZT7SIor7Ug2iaJx4WGxU1eliasCbzdkr2goyyiclJAo2gkVv3PyNLhB8uD3hp4NUFK0mg/640?wx_fmt=other&wxfrom=5&wx_lazy=1&wx_co=1)carbon.png
 
-## 六、实现 watch 模式
+实现 watch 模式
 
 看完上面的实现，有些小伙伴可能有疑问了：`Compilation` 中的 `this.fileDependencies`（本次打包涉及到的文件）是用来做什么的？为什么没有地方用到该属性？
 
-这里其实是为了实现 **Webpack 的 watch 模式**[21]：当文件发生变更时将重新编译。
+这里其实是为了实现 **Webpack 的 watch 模式**[4]：当文件发生变更时将重新编译。
 
 思路：对 `this.fileDependencies` 里面的文件进行监听，当文件发生变化时，重新执行 `compile` 函数。
 
@@ -1132,11 +1068,12 @@ class Compiler {
     this.compile(onCompiled); //开始编译，成功之后调用onCompiled
   }
 }
-复制代码
 ```
 
 相信看到这里，你一定也理解了 compile 和 Compilation 的设计，都是为了解耦和复用呀。
 
-## 七、总结
+## 总结
 
 本文从 Webpack 的基本使用和构建产物出发，从思想和架构两方面深度剖析了 Webpack 的设计理念。最后在代码实现阶段，通过百来行代码手写了 Webpack 的整体流程，尽管它只能对文件进行打包，还缺少很多功能，但麻雀虽小，却也五脏俱全。
+
+相信读完本章，你也一定已经克服 Webpack 的恐惧了!
